@@ -1,4 +1,7 @@
 'use client';
+import { Table, THead, TBody, TR, TH, TD } from "./ui/table";
+import { Input } from "./ui/input";
+
 export default function ScenesTable({
   scenes,
   onChange
@@ -14,56 +17,32 @@ export default function ScenesTable({
 
   return (
     <div className="overflow-x-auto rounded border">
-      <table className="min-w-full text-sm">
-        <thead className="bg-gray-50">
-          <tr>
-            <th className="p-2 text-left">#</th>
-            <th className="p-2 text-left">Start</th>
-            <th className="p-2 text-left">End</th>
-            <th className="p-2 text-left">Visual</th>
-            <th className="p-2 text-left">Text</th>
-            <th className="p-2 text-left">VO</th>
-            <th className="p-2 text-left">Image Prompt</th>
-          </tr>
-        </thead>
-        <tbody>
+      <Table>
+        <THead>
+          <TR>
+            <TH>#</TH>
+            <TH>Start</TH>
+            <TH>End</TH>
+            <TH>Visual</TH>
+            <TH>Text</TH>
+            <TH>VO</TH>
+            <TH>Image Prompt</TH>
+          </TR>
+        </THead>
+        <TBody>
           {scenes.map((s, i) => (
-            <tr key={i} className="border-t">
-              <td className="p-2">{s.index ?? i + 1}</td>
-              <td className="p-2">
-                <input className="w-20 rounded border p-1"
-                       value={s.start || ""}
-                       onChange={(e)=>update(i, "start", e.target.value)} />
-              </td>
-              <td className="p-2">
-                <input className="w-20 rounded border p-1"
-                       value={s.end || ""}
-                       onChange={(e)=>update(i, "end", e.target.value)} />
-              </td>
-              <td className="p-2">
-                <input className="w-64 rounded border p-1"
-                       value={s.visual || ""}
-                       onChange={(e)=>update(i, "visual", e.target.value)} />
-              </td>
-              <td className="p-2">
-                <input className="w-48 rounded border p-1"
-                       value={s.text || ""}
-                       onChange={(e)=>update(i, "text", e.target.value)} />
-              </td>
-              <td className="p-2">
-                <input className="w-64 rounded border p-1"
-                       value={s.vo || ""}
-                       onChange={(e)=>update(i, "vo", e.target.value)} />
-              </td>
-              <td className="p-2">
-                <input className="w-64 rounded border p-1"
-                       value={s.imagePrompt || ""}
-                       onChange={(e)=>update(i, "imagePrompt", e.target.value)} />
-              </td>
-            </tr>
+            <TR key={i}>
+              <TD className="w-10">{s.index ?? i + 1}</TD>
+              <TD className="w-24"><Input value={s.start || ""} onChange={(e)=>update(i, "start", e.target.value)} /></TD>
+              <TD className="w-24"><Input value={s.end || ""} onChange={(e)=>update(i, "end", e.target.value)} /></TD>
+              <TD className="min-w-64"><Input value={s.visual || ""} onChange={(e)=>update(i, "visual", e.target.value)} /></TD>
+              <TD className="min-w-48"><Input value={s.text || ""} onChange={(e)=>update(i, "text", e.target.value)} /></TD>
+              <TD className="min-w-64"><Input value={s.vo || ""} onChange={(e)=>update(i, "vo", e.target.value)} /></TD>
+              <TD className="min-w-64"><Input value={s.imagePrompt || ""} onChange={(e)=>update(i, "imagePrompt", e.target.value)} /></TD>
+            </TR>
           ))}
-        </tbody>
-      </table>
+        </TBody>
+      </Table>
     </div>
   );
 }

@@ -1,5 +1,7 @@
 'use client';
 import { useState } from "react";
+import { Input } from "./ui/input";
+import { Button } from "./ui/button";
 
 export default function ImageCard({
   index,
@@ -15,31 +17,26 @@ export default function ImageCard({
   const [tweak, setTweak] = useState("");
 
   return (
-    <div className="rounded border p-3 space-y-2">
-      <div className="text-sm font-medium">
-        Scene {index + 1} ({scene.start}–{scene.end})
-      </div>
+    <div className="space-y-3">
       {src ? (
-        <img src={src} alt={`Scene ${index + 1}`} className="w-full aspect-video object-cover rounded" />
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt={`Scene ${index + 1}`} className="w-full aspect-video object-cover rounded-md border" />
       ) : (
-        <div className="w-full aspect-video bg-gray-100 rounded grid place-items-center text-gray-400">
+        <div className="w-full aspect-video rounded-md border grid place-items-center text-muted-foreground">
           Rendering…
         </div>
       )}
-      <div className="text-sm text-gray-600">Text: {scene.text}</div>
-      <input
-        className="w-full rounded border p-2"
+      <div className="text-sm text-muted-foreground">Text: {scene.text}</div>
+      <Input
         placeholder="Prompt tweak (optional)"
         value={tweak}
         onChange={(e) => setTweak(e.target.value)}
       />
       <div className="flex gap-2">
-        <button onClick={() => onRegenerate(index, tweak)} className="px-3 py-2 rounded border">
-          Regenerate
-        </button>
+        <Button onClick={() => onRegenerate(index, tweak)}>Regenerate</Button>
         {src && (
-          <a className="px-3 py-2 rounded border" download={`scene-${index + 1}.png`} href={src}>
-            Download
+          <a download={`scene-${index + 1}.png`} href={src}>
+            <Button variant="outline">Download</Button>
           </a>
         )}
       </div>

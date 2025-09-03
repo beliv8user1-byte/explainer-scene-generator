@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import ScenesTable from "@/components/ScenesTable";
 import { useRouter } from "next/navigation";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 export default function ScenesPage() {
   const router = useRouter();
@@ -39,17 +41,32 @@ export default function ScenesPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Step 2 — Scenes</h1>
-      <div className="flex gap-2">
-        <button onClick={genScenes} className="px-3 py-2 rounded border">Generate Scenes</button>
-        {loading && <span className="text-sm text-gray-500">{loading}</span>}
+      <div className="space-y-2">
+        <h1 className="text-2xl font-semibold tracking-tight">Step 2 — Scenes</h1>
+        <p className="text-sm text-muted-foreground">Convert the script into tight, visual scenes and edit as needed.</p>
       </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Generate Scenes</CardTitle>
+          <CardDescription>We’ll produce 6–8 concise scenes with prompts for images.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex items-center gap-3">
+          <Button onClick={genScenes}>Generate Scenes</Button>
+          {loading && <span className="text-sm text-muted-foreground">{loading}</span>}
+        </CardContent>
+      </Card>
 
       {scenes.length > 0 && (
-        <>
-          <ScenesTable scenes={scenes} onChange={setScenes} />
-          <button onClick={goImages} className="px-3 py-2 rounded border">Continue → Images</button>
-        </>
+        <Card>
+          <CardHeader>
+            <CardTitle>Scenes</CardTitle>
+            <CardDescription>Edit timings, text, and prompts before rendering images.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <ScenesTable scenes={scenes} onChange={setScenes} />
+            <Button onClick={goImages} variant="secondary">Continue → Images</Button>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

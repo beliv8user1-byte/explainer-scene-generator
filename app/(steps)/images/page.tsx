@@ -2,6 +2,8 @@
 import { useEffect, useState } from "react";
 import ImageCard from "@/components/ImageCard";
 import { useRouter } from "next/navigation";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 export default function ImagesPage() {
   const router = useRouter();
@@ -61,19 +63,31 @@ export default function ImagesPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Step 3 — Images</h1>
-      {loading && <div className="text-sm text-gray-500">{loading}</div>}
+      <div className="space-y-2">
+        <h1 className="text-2xl font-semibold tracking-tight">Step 3 — Images</h1>
+        <p className="text-sm text-muted-foreground">Render frames for each scene and optionally tweak prompts.</p>
+      </div>
+
+      {loading && <div className="text-sm text-muted-foreground">{loading}</div>}
 
       <div className="grid md:grid-cols-2 gap-4">
         {scenes.map((s, i) => (
-          <ImageCard key={i} index={i} scene={s} src={images[i]} onRegenerate={regenOne} />
+          <Card key={i}>
+            <CardHeader>
+              <CardTitle className="text-base">Scene {i + 1} ({s.start}–{s.end})</CardTitle>
+              <CardDescription>{s.text}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <ImageCard index={i} scene={s} src={images[i]} onRegenerate={regenOne} />
+            </CardContent>
+          </Card>
         ))}
       </div>
 
       {images.length > 0 && (
         <div className="flex gap-2">
-          <button onClick={exportZip} className="px-3 py-2 rounded border">Export ZIP</button>
-          <a href="/" className="px-3 py-2 rounded border">Start Over</a>
+          <Button onClick={exportZip} variant="outline">Export ZIP</Button>
+          <a href="/"><Button variant="secondary">Start Over</Button></a>
         </div>
       )}
     </div>

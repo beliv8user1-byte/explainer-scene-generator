@@ -1,6 +1,9 @@
 'use client';
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import ThemeToggle from "./ThemeToggle";
+import { Input } from "./ui/input";
+import { Button } from "./ui/button";
 
 export default function TopBar() {
   const [email, setEmail] = useState("");
@@ -31,27 +34,38 @@ export default function TopBar() {
   }
 
   return (
-    <header className="w-full sticky top-0 z-10 bg-white/80 backdrop-blur border-b">
-      <div className="max-w-5xl mx-auto p-3 flex items-center gap-3">
-        <div className="font-semibold">{process.env.NEXT_PUBLIC_APP_NAME || "Explainer Scene Generator"}</div>
+    <header className="sticky top-0 z-20 w-full border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="mx-auto max-w-6xl px-4 md:px-6 h-14 flex items-center gap-3">
+        <a href="/" className="flex items-center gap-3 hover:opacity-90">
+          <div className="h-7 w-7 rounded bg-primary/15 flex items-center justify-center text-primary font-bold">ESG</div>
+          <span className="font-semibold tracking-tight text-sm md:text-base">
+            {process.env.NEXT_PUBLIC_APP_NAME || "Explainer Scene Generator"}
+          </span>
+        </a>
+        <nav className="hidden md:flex items-center gap-6 ml-6 text-sm text-muted-foreground">
+          <a href="/" className="hover:text-foreground">Script</a>
+          <a href="/scenes" className="hover:text-foreground">Scenes</a>
+          <a href="/images" className="hover:text-foreground">Images</a>
+        </nav>
         <div className="ml-auto flex items-center gap-2">
+          <ThemeToggle />
           {userEmail ? (
             <>
-              <span className="text-sm text-gray-600">{userEmail}</span>
-              <button onClick={signOut} className="px-3 py-1 rounded border">Sign out</button>
+              <span className="hidden sm:inline text-sm text-muted-foreground">{userEmail}</span>
+              <Button variant="outline" size="sm" onClick={signOut}>Sign out</Button>
             </>
           ) : (
             <>
-              <input
+              <Input
                 type="email"
                 placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="px-2 py-1 rounded border"
+                className="h-9 w-44 sm:w-56"
               />
-              <button onClick={signIn} disabled={loading} className="px-3 py-1 rounded border">
+              <Button size="sm" onClick={signIn} disabled={loading}>
                 {loading ? "Sending…" : "Sign in"}
-              </button>
+              </Button>
             </>
           )}
         </div>

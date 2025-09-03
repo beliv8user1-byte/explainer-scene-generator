@@ -1,6 +1,10 @@
 'use client';
 import { useState } from "react";
 import Editor from "@/components/Editor";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 
 export default function Page() {
   const [businessName, setBusinessName] = useState("");
@@ -46,53 +50,71 @@ export default function Page() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Step 1 — Script</h1>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <label className="text-sm">Business Name</label>
-          <input className="w-full rounded border p-2"
-                 value={businessName}
-                 onChange={(e)=>setBusinessName(e.target.value)} />
-        </div>
-        <div className="space-y-2">
-          <label className="text-sm">Website URL</label>
-          <input className="w-full rounded border p-2"
-                 placeholder="https://example.com"
-                 value={websiteUrl}
-                 onChange={(e)=>setWebsiteUrl(e.target.value)} />
-        </div>
+      <div className="space-y-2">
+        <h1 className="text-2xl font-semibold tracking-tight">Step 1 — Script</h1>
+        <p className="text-sm text-muted-foreground">Scrape a website and generate a tight 60s script.</p>
       </div>
 
-      <div className="flex gap-2">
-        <button onClick={doScrape} className="px-3 py-2 rounded border">Scrape site</button>
-        {loading && <span className="text-sm text-gray-500">{loading}</span>}
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Business Context</CardTitle>
+          <CardDescription>Provide a URL to scrape and an optional business name.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Business Name</Label>
+            <Input value={businessName} onChange={(e)=>setBusinessName(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Website URL</Label>
+            <Input placeholder="https://example.com" value={websiteUrl} onChange={(e)=>setWebsiteUrl(e.target.value)} />
+          </div>
+          <div className="md:col-span-2">
+            <Button onClick={doScrape}>Scrape site</Button>
+            {loading && <span className="ml-3 text-sm text-muted-foreground">{loading}</span>}
+          </div>
+        </CardContent>
+      </Card>
 
       {scraped && (
-        <div className="rounded border p-3 space-y-2">
-          <div className="text-sm font-medium">Scrape Preview</div>
-          <div className="text-sm text-gray-600">Title: {scraped.title}</div>
-          <Editor label="About (editable)" initial={scraped.about || scraped.desc || ""} onChange={(v)=>{
-            setScraped({...scraped, about: v});
-          }} />
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Scrape Preview</CardTitle>
+            <CardDescription className="truncate">Title: {scraped.title}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Editor label="About (editable)" initial={scraped.about || scraped.desc || ""} onChange={(v)=>{
+              setScraped({...scraped, about: v});
+            }} />
+          </CardContent>
+        </Card>
       )}
 
-      <Editor label="Regeneration notes (optional)" initial={notes} onChange={setNotes} />
-
-      <div className="flex gap-2">
-        <button onClick={genScript} className="px-3 py-2 rounded border">Generate Script</button>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Regeneration Notes</CardTitle>
+          <CardDescription>Optional guidance to steer the script’s tone and focus.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Editor label="Notes" initial={notes} onChange={setNotes} />
+          <div className="pt-4">
+            <Button onClick={genScript}>Generate Script</Button>
+            {loading && <span className="ml-3 text-sm text-muted-foreground">{loading}</span>}
+          </div>
+        </CardContent>
+      </Card>
 
       {script && (
-        <div className="rounded border p-3 space-y-3">
-          <div className="text-sm font-medium">Script</div>
-          <Editor label="Script (editable)" initial={script} onChange={setScript} />
-          <div className="flex gap-2">
-            <button onClick={goScenes} className="px-3 py-2 rounded border">Continue → Scenes</button>
-          </div>
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Script</CardTitle>
+            <CardDescription>Review and edit before moving to Scenes.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Editor label="Script (editable)" initial={script} onChange={setScript} />
+            <Button onClick={goScenes} variant="secondary">Continue → Scenes</Button>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
