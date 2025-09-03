@@ -1,28 +1,17 @@
-import { NextResponse } from "next/server";
-import { z } from "zod";
-import { scrapeUrl } from "@/lib/scrape";
+import { NextRequest, NextResponse } from "next/server";
+import { scrapePublicPage } from "@/lib/scrape";
 
-const BodySchema = z.object({
-  url: z.string().url(),
-});
+export async function POST(req: NextRequest) {
+  const { url } = await req.json();
+  if (!url) return NextResponse.json({ error: "url required" }, { status: 400 });
+  if ((/linkedin\.com\//i).test(url)) {
+    return NextResponse.json({ ok: false, error: "LinkedIn scraping disabled. Paste About text instead." }, { status: 400 });
+  }
 
-export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { url } = BodySchema.parse(body);
-
-    if (/linkedin\.com/i.test(url)) {
-      return NextResponse.json(
-        { error: "LinkedIn scraping is not allowed." },
-        { status: 400 }
-      );
-    }
-
-    const result = await scrapeUrl(url);
-    return NextResponse.json(result);
-  } catch (err: any) {
-    const message = err?.message ?? "Unknown error";
-    return NextResponse.json({ error: message }, { status: 400 });
+    const data = await scrapePublicPage(url);
+    return NextResponse.json({ ok: true, data });
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: e.message }, { status: 500 });
   }
 }
-

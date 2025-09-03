@@ -1,57 +1,78 @@
-"use client";
-import TopBar from "@/components/TopBar";
+'use client';
+import { useEffect, useState } from "react";
 import ImageCard from "@/components/ImageCard";
-import { useState } from "react";
 
-export default function StepImagesPage() {
+export default function ImagesPage() {
   const [scenes, setScenes] = useState<any[]>([]);
-  const [frames, setFrames] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [images, setImages] = useState<string[]>([]);
+  const [loading, setLoading] = useState<string>("");
 
-  const generateImages = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/generate-images", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scenes }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed");
-      setFrames(data.frames || []);
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    const s = sessionStorage.getItem("esg-scenes");
+    if (!s) return (window.location.href = "/scenes");
+    setScenes(JSON.parse(s));
+  }, []);
+
+  async function genAll() {
+    setLoading("Rendering all…");
+    const r = await fetch("/api/generate-images", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scenes })
+    });
+    const j = await r.json();
+    setLoading("");
+    if (!j.ok) return alert(j.error || "Images failed");
+    setImages(j.images || []);
+  }
+
+  useEffect(() => {
+    if (scenes.length) genAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scenes.length]);
+
+  async function regenOne(idx: number, tweak: string) {
+    const only = [{ ...scenes[idx], imagePrompt: (tweak || scenes[idx].imagePrompt) }];
+    const r = await fetch("/api/generate-images", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scenes: only })
+    });
+    const j = await r.json();
+    if (!j.ok) return alert(j.error || "Regen failed");
+    const copy = images.slice();
+    copy[idx] = j.images?.[0];
+    setImages(copy);
+  }
+
+  function exportZip() {
+    // minimal: let users right-click download each; export zip can be added later
+    alert("Export ZIP not implemented yet. Download images individually for now.");
+  }
 
   return (
-    <div className="min-h-screen">
-      <TopBar title="Step 3: Images" />
-      <main className="mx-auto max-w-6xl p-4 space-y-4">
-        <p className="text-sm text-gray-600">Paste scenes JSON from Step 2 (or wire up state sharing) and generate frames.</p>
-        <textarea
-          className="w-full border rounded p-2 h-40"
-          placeholder='[{"id":"1","caption":"..."}]'
-          onChange={(e) => {
-            try { setScenes(JSON.parse(e.target.value || "[]")); setError(null); }
-            catch { setError("Invalid JSON"); }
-          }}
-        />
-        <button className="px-4 py-2 rounded bg-blue-600 text-white" onClick={generateImages} disabled={loading}>
-          {loading ? "Generating..." : "Generate Frames"}
-        </button>
-        {error && <p className="text-red-600">{error}</p>}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-4">
-          {frames.map((f) => (
-            <ImageCard key={f.id} src={f.url} alt={f.alt || f.id} caption={f.id} />
-          ))}
+    <div className="space-y-6">
+      <h1 className="text-2xl font-semibold">Step 3 — Images</h1>
+      {loading && <div className="text-sm text-gray-500">{loading}</div>}
+
+      <div className="grid md:grid-cols-2 gap-4">
+        {scenes.map((s, i) => (
+          <ImageCard
+            key={i}
+            index={i}
+            scene={s}
+            src={images[i]}
+            onRegenerate={regenOne}
+          />
+        ))}
+      </div>
+
+      {images.length > 0 && (
+        <div className="flex gap-2">
+          <button onClick={exportZip} className="px-3 py-2 rounded border">Export ZIP</button>
+          <a href="/" className="px-3 py-2 rounded border">Start Over</a>
         </div>
-      </main>
+      )}
     </div>
   );
 }
-

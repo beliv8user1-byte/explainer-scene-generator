@@ -1,25 +1,15 @@
 import { z } from "zod";
 
 export const SceneSchema = z.object({
-  id: z.string(),
-  caption: z.string(),
-  voiceover: z.string().optional(),
+  index: z.number().int().min(1),
+  start: z.string().regex(/^\d{2}:\d{2}$/),
+  end: z.string().regex(/^\d{2}:\d{2}$/),
+  visual: z.string().min(5).max(240),
+  text: z.string().min(1).max(32),
+  vo: z.string().min(5).max(240),
+  imagePrompt: z.string().min(5).max(240)
 });
 
-export const ScenesSchema = z.object({
-  scenes: z.array(SceneSchema).min(1),
+export const SceneSetSchema = z.object({
+  scenes: z.array(SceneSchema).min(6).max(8)
 });
-
-export const FrameSchema = z.object({
-  id: z.string(),
-  url: z.string(),
-  alt: z.string().optional(),
-});
-
-export const FramesSchema = z.array(FrameSchema);
-
-export type Scene = z.infer<typeof SceneSchema>;
-export type Scenes = z.infer<typeof ScenesSchema>;
-export type Frame = z.infer<typeof FrameSchema>;
-export type Frames = z.infer<typeof FramesSchema>;
-

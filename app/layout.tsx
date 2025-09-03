@@ -1,5 +1,10 @@
-import './globals.css';
-import TopBar from '@/components/TopBar';
+import "./globals.css";
+import TopBar from "@/components/TopBar";
+
+export const metadata = {
+  title: process.env.NEXT_PUBLIC_APP_NAME || "Explainer Scene Generator",
+  description: "Generate 60s explainer scripts, scenes, and image frames."
+};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

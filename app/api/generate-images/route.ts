@@ -1,49 +1,50 @@
-import { NextResponse } from "next/server";
-import { z } from "zod";
-import { FramesSchema } from "@/lib/schemas";
-import { getOpenRouterClient } from "@/lib/openrouter";
+import { NextRequest, NextResponse } from "next/server";
+import { openrouter, OPENROUTER_IMAGE_MODEL } from "@/lib/openrouter";
 
-const BodySchema = z.object({
-  scenes: z.array(
-    z.object({ id: z.string(), caption: z.string(), prompt: z.string().optional() })
-  ),
-  model: z.string().optional(),
-});
+function extractImageData(resp: any): string | null {
+  // Try common spots where OpenRouter returns data URLs
+  const msg = resp?.choices?.[0]?.message;
+  // 1) Some models return content string with a data URL
+  const maybeText = msg?.content;
+  if (typeof maybeText === "string" && maybeText.startsWith("data:image")) return maybeText;
 
-export async function POST(request: Request) {
+  // 2) Some return images array with url
+  const imgUrl = msg?.images?.[0]?.image_url?.url;
+  if (typeof imgUrl === "string" && imgUrl.startsWith("data:image")) return imgUrl;
+
+  // 3) Some return a JSON object inside content
   try {
-    const { scenes, model } = BodySchema.parse(await request.json());
+    const parsed = JSON.parse(maybeText || "{}");
+    if (typeof parsed.image === "string" && parsed.image.startsWith("data:image")) return parsed.image;
+  } catch {}
 
-    // Placeholder implementation: if no OPENROUTER_API_KEY, return placeholder images.
-    if (!process.env.OPENROUTER_API_KEY) {
-      const frames = scenes.map((s, i) => ({
-        id: s.id,
-        url: `https://placehold.co/1024x576?text=Scene+${i + 1}`,
-        alt: s.caption,
-      }));
-      return NextResponse.json({ frames });
-    }
-
-    // Example image generation sketch via OpenRouter (model must support image generation)
-    // Many models expose different APIs; this is a best-effort placeholder using Chat Completions with image URLs.
-    const client = getOpenRouterClient();
-    const selectedModel = model ?? process.env.OPENROUTER_DEFAULT_IMAGE_MODEL ?? "google/gemini-2.0-flash-001";
-
-    const frames: z.infer<typeof FramesSchema> = [];
-    for (const [index, s] of scenes.entries()) {
-      // NOTE: Replace with actual image-generation call once model details are confirmed.
-      // Returning placeholder to keep flow unblocked.
-      frames.push({
-        id: s.id,
-        url: `https://placehold.co/1024x576?text=Scene+${index + 1}`,
-        alt: s.caption,
-      });
-    }
-
-    return NextResponse.json({ frames, model: selectedModel });
-  } catch (err: any) {
-    const message = err?.message ?? "Failed to generate images";
-    return NextResponse.json({ error: message }, { status: 400 });
-  }
+  return null;
 }
 
+export async function POST(req: NextRequest) {
+  const { scenes } = await req.json();
+  if (!Array.isArray(scenes) || scenes.length === 0) {
+    return NextResponse.json({ error: "scenes required" }, { status: 400 });
+  }
+
+  try {
+    const images: string[] = [];
+    for (const s of scenes) {
+      const prompt = `Explainer storyboard frame, ${s?.imagePrompt || s?.visual || ""}. 16:9, cinematic lighting, clean graphic style.`;
+      const resp = await openrouter.chat.completions.create({
+        model: OPENROUTER_IMAGE_MODEL,
+        messages: [{ role: "user", content: prompt }],
+        // image-capable models on OpenRouter often need modalities
+        modalities: ["image", "text"]
+      });
+
+      const dataUrl = extractImageData(resp);
+      if (!dataUrl) throw new Error("No image in response");
+      images.push(dataUrl);
+    }
+
+    return NextResponse.json({ ok: true, images });
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: e.message }, { status: 500 });
+  }
+}
