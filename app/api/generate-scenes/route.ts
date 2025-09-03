@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SCENE_SYSTEM } from "@/lib/prompts";
-import { SceneSetSchema } from "@/lib/schemas";
+import {
+  SceneSetSchema,
+  SceneSetLooseSchema,
+  clampWords,
+  clampChars
+} from "@/lib/schemas";
 import { jsonrepair } from "jsonrepair";
 
 // OpenRouter config
@@ -9,7 +14,6 @@ const OR_KEY = process.env.OPENROUTER_API_KEY!;
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "Explainer Scene Generator";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
-// ---------- helpers ----------
 function stripCodeFences(s: string) {
   return s.replace(/```[a-z]*\n?([\s\S]*?)```/gi, (_m, p1) => p1 || "");
 }
@@ -31,7 +35,8 @@ function tidyJson(raw: string) {
   try { return JSON.parse(jsonrepair(t)); } catch {}
   return null;
 }
-function normalizeTime(t: string) {
+function normalizeTime(t?: string, fallback = "00:00") {
+  if (!t) return fallback;
   const dash = t.match(/(\d{1,2})\s*[-–]\s*(\d{1,2})/);
   if (dash) {
     const mm = String(parseInt(dash[1], 10)).padStart(2, "0");
@@ -46,33 +51,87 @@ function normalizeTime(t: string) {
   }
   const secs = t.match(/(\d{1,2})\s*s/);
   if (secs) return `00:${String(parseInt(secs[1], 10)).padStart(2, "0")}`;
-  return t;
-}
-function normalizeScenesShape(input: any) {
-  if (!input || typeof input !== "object") return null;
-  const scenes = Array.isArray(input.scenes) ? input.scenes : [];
-  const fixed = scenes.map((s: any, i: number) => ({
-    index: Number(s.index ?? i + 1),
-    start: normalizeTime(String(s.start ?? "00:00")),
-    end: normalizeTime(String(s.end ?? "00:08")),
-    visual: String(s.visual ?? "").trim(),
-    text: String(s.text ?? "").trim(),
-    vo: String(s.vo ?? "").trim(),
-    imagePrompt: String(s.imagePrompt ?? "").trim()
-  }));
-  return { scenes: fixed };
+  return fallback;
 }
 
-async function callScenesViaOpenRouter(script: string, style?: string, forceJson = false) {
+/** Split one scene into two halves (time-only heuristic) */
+function splitScene(scene: any) {
+  const [m1, s1] = scene.start.split(":").map((n: string) => parseInt(n, 10));
+  const [m2, s2] = scene.end.split(":").map((n: string) => parseInt(n, 10));
+  const t1 = m1 * 60 + s1;
+  const t2 = m2 * 60 + s2;
+  const mid = Math.max(t1 + 1, Math.floor((t1 + t2) / 2));
+  const midStr = `${String(Math.floor(mid / 60)).padStart(2, "0")}:${String(mid % 60).padStart(2, "0")}`;
+
+  const A = { ...scene, end: midStr };
+  const B = { ...scene, start: midStr };
+  return [A, B];
+}
+
+/** Coerce loose scenes to strict-ish shape, then clamp count to 6–8 */
+function normalizeScenes(loose: any): any[] | null {
+  const arr = Array.isArray(loose?.scenes) ? loose.scenes : [];
+  if (!arr.length) return null;
+
+  let fixed = arr.map((s: any, i: number) => {
+    const start = normalizeTime(String(s.start ?? ""), "00:00");
+    const end = normalizeTime(String(s.end ?? ""), "00:08");
+    // Scrub the fields
+    const text = clampWords(clampChars(String(s.text ?? "").replace(/[\"“”]/g, ""), 32), 8);
+    const visual = clampChars(String(s.visual ?? ""), 240);
+    const vo = clampChars(String(s.vo ?? ""), 240);
+    const imagePrompt = clampChars(
+      String(s.imagePrompt ?? s.visual ?? "").replace(/[\"“”]/g, ""),
+      240
+    );
+    return {
+      index: Number(s.index ?? i + 1),
+      start,
+      end,
+      visual,
+      text,
+      vo,
+      imagePrompt
+    };
+  });
+
+  // If fewer than 6, try splitting longest scenes until we reach 6
+  const toSecs = (t: string) => {
+    const [m, s] = t.split(":").map((n) => parseInt(n, 10));
+    return m * 60 + s;
+    };
+  const span = (sc: any) => Math.max(1, toSecs(sc.end) - toSecs(sc.start));
+
+  while (fixed.length < 6 && fixed.length > 0) {
+    // find the longest scene and split it
+    let idx = 0;
+    let best = -1;
+    fixed.forEach((sc, i) => {
+      const sp = span(sc);
+      if (sp > best) { best = sp; idx = i; }
+    });
+    const [A, B] = splitScene(fixed[idx]);
+    fixed.splice(idx, 1, A, B);
+  }
+
+  // If more than 8, slice
+  if (fixed.length > 8) fixed = fixed.slice(0, 8);
+
+  // Reindex
+  fixed = fixed.map((s, i) => ({ ...s, index: i + 1 }));
+
+  return fixed;
+}
+
+async function callScenes(script: string, style?: string, forceJson = false) {
   const userContent = `Make concise, cinematic scenes from this script.${style ? ` Style: ${style}` : ""}\n\nSCRIPT:\n${script}`;
-
   const body: any = {
     model: process.env.OPENROUTER_MODEL || "openai/gpt-oss-120b:free",
     messages: [
       { role: "system", content: SCENE_SYSTEM },
-      { role: "user", content: userContent },
+      { role: "user", content: userContent }
     ],
-    temperature: 0.3,
+    temperature: 0.3
   };
   if (forceJson) body.response_format = { type: "json_object" };
 
@@ -82,9 +141,9 @@ async function callScenesViaOpenRouter(script: string, style?: string, forceJson
       "Authorization": `Bearer ${OR_KEY}`,
       "Content-Type": "application/json",
       "HTTP-Referer": APP_URL,
-      "X-Title": APP_NAME,
+      "X-Title": APP_NAME
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(body)
   });
 
   const json = await res.json();
@@ -95,37 +154,34 @@ async function callScenesViaOpenRouter(script: string, style?: string, forceJson
   return json?.choices?.[0]?.message?.content || "";
 }
 
-// ---------- route ----------
 export async function POST(req: NextRequest) {
   const { script, style } = await req.json();
-  if (!script) return NextResponse.json({ error: "script required" }, { status: 400 });
+  if (!script) return NextResponse.json({ ok: false, error: "script required" }, { status: 400 });
 
   try {
-    // Try with JSON response_format first
-    let raw = await callScenesViaOpenRouter(script, style, true);
+    // Pass 1: ask for JSON mode
+    let raw = await callScenes(script, style, true);
     let obj = tidyJson(raw);
-    let normalized = normalizeScenesShape(obj);
 
-    // Fallback: normal completion (some models format better this way)
-    if (!normalized) {
-      raw = await callScenesViaOpenRouter(script, style, false);
+    // Parse with loose schema first
+    let looseParsed = obj ? SceneSetLooseSchema.safeParse(obj) : null;
+
+    // Pass 2: fallback without response_format
+    if (!looseParsed?.success) {
+      raw = await callScenes(script, style, false);
       obj = tidyJson(raw);
-      normalized = normalizeScenesShape(obj);
+      looseParsed = obj ? SceneSetLooseSchema.safeParse(obj) : null;
     }
+    if (!looseParsed?.success) throw new Error("Invalid scenes JSON");
 
+    const normalized = normalizeScenes(looseParsed.data);
     if (!normalized) throw new Error("Invalid scenes JSON");
 
-    // Final validation gate
-    const parsed = SceneSetSchema.safeParse(normalized);
-    if (!parsed.success) {
-      // Soft fix: clamp to max 8 scenes
-      const compact = { scenes: normalized.scenes.slice(0, 8) };
-      const recheck = SceneSetSchema.safeParse(compact);
-      if (!recheck.success) throw new Error("Invalid scenes JSON");
-      return NextResponse.json({ ok: true, scenes: compact.scenes });
-    }
+    // Final strict gate
+    const strict = SceneSetSchema.safeParse({ scenes: normalized });
+    if (!strict.success) throw new Error("Invalid scenes JSON");
 
-    return NextResponse.json({ ok: true, scenes: parsed.data.scenes });
+    return NextResponse.json({ ok: true, scenes: strict.data.scenes });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e.message || "Invalid scenes JSON" }, { status: 500 });
   }

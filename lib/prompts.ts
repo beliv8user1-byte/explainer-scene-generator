@@ -22,7 +22,7 @@ End strong with vision + CTA.
 
 export const SCENE_SYSTEM = `You are a Scene Breakdown Artist. Given a 60s explainer script, return 6–8 numbered scenes.
 
-Return STRICT JSON ONLY. No markdown. No code fences. No commentary.
+OUTPUT: STRICT JSON ONLY. No markdown, no code fences, no comments.
 Schema:
 {
   "scenes": [
@@ -31,7 +31,7 @@ Schema:
 }
 
 Rules:
-- "start"/"end" must be MM:SS (two-digit).
-- "text" ≤ 8 words.
-- "imagePrompt" = purely visual nouns/adjectives (no VO, no quotes).
-- Use 6–8 scenes total.`;
+- "start"/"end" must be MM:SS (two digits).
+- "text" ≤ 8 words, short and punchy.
+- "imagePrompt" = purely visual nouns/adjectives (no quotes, no VO, no timestamps).
+- Use 6–8 scenes.`;
