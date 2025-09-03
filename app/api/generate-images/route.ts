@@ -1,50 +1,80 @@
 import { NextRequest, NextResponse } from "next/server";
-import { openrouter, OPENROUTER_IMAGE_MODEL } from "@/lib/openrouter";
+import { OPENROUTER_IMAGE_MODEL } from "@/lib/openrouter";
 
-function extractImageData(resp: any): string | null {
-  // Try common spots where OpenRouter returns data URLs
-  const msg = resp?.choices?.[0]?.message;
-  // 1) Some models return content string with a data URL
-  const maybeText = msg?.content;
-  if (typeof maybeText === "string" && maybeText.startsWith("data:image")) return maybeText;
+// Pull from env or fall back to defaults
+const OR_BASE = process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1";
+const OR_KEY = process.env.OPENROUTER_API_KEY!;
+const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "Explainer Scene Generator";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
-  // 2) Some return images array with url
-  const imgUrl = msg?.images?.[0]?.image_url?.url;
-  if (typeof imgUrl === "string" && imgUrl.startsWith("data:image")) return imgUrl;
+// Safely extract a base64 data URL from OpenRouter's response
+function extractDataUrl(json: any): string | null {
+  const msg = json?.choices?.[0]?.message;
+  // Preferred field per docs
+  const img = msg?.images?.[0]?.image_url?.url;
+  if (typeof img === "string" && img.startsWith("data:image")) return img;
 
-  // 3) Some return a JSON object inside content
+  // Sometimes the model sticks it into content as a plain data URL string
+  const content = msg?.content;
+  if (typeof content === "string" && content.startsWith("data:image")) return content;
+
+  // Occasionally wrapped in a tiny JSON blob
   try {
-    const parsed = JSON.parse(maybeText || "{}");
-    if (typeof parsed.image === "string" && parsed.image.startsWith("data:image")) return parsed.image;
+    const parsed = typeof content === "string" ? JSON.parse(content) : null;
+    if (parsed?.image && String(parsed.image).startsWith("data:image")) return parsed.image;
   } catch {}
 
   return null;
 }
 
+async function renderOne(prompt: string) {
+  const payload: any = {
+    model: OPENROUTER_IMAGE_MODEL,
+    messages: [{ role: "user", content: prompt }],
+    // Required for image-generation models on OpenRouter
+    modalities: ["image", "text"],
+  };
+
+  const res = await fetch(`${OR_BASE}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${OR_KEY}`,
+      "Content-Type": "application/json",
+      // Optional attribution headers recommended by OpenRouter
+      "HTTP-Referer": APP_URL,
+      "X-Title": APP_NAME,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const json = await res.json();
+  if (!res.ok) {
+    const msg = json?.error?.message || json?.message || res.statusText;
+    throw new Error(`OpenRouter image error: ${msg}`);
+  }
+
+  const dataUrl = extractDataUrl(json);
+  if (!dataUrl) throw new Error("No image in response");
+  return dataUrl;
+}
+
 export async function POST(req: NextRequest) {
   const { scenes } = await req.json();
   if (!Array.isArray(scenes) || scenes.length === 0) {
-    return NextResponse.json({ error: "scenes required" }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "scenes required" }, { status: 400 });
   }
 
   try {
+    // Build prompts and render sequentially (gentler on free rate limits)
     const images: string[] = [];
     for (const s of scenes) {
-      const prompt = `Explainer storyboard frame, ${s?.imagePrompt || s?.visual || ""}. 16:9, cinematic lighting, clean graphic style.`;
-      const resp = await openrouter.chat.completions.create({
-        model: OPENROUTER_IMAGE_MODEL,
-        messages: [{ role: "user", content: prompt }],
-        // image-capable models on OpenRouter often need modalities
-        modalities: ["image", "text"]
-      });
-
-      const dataUrl = extractImageData(resp);
-      if (!dataUrl) throw new Error("No image in response");
-      images.push(dataUrl);
+      const base = (s?.imagePrompt || s?.visual || "").toString().trim();
+      const prompt = `Explainer storyboard frame, ${base}. 16:9, cinematic lighting, clean graphic style.`;
+      images.push(await renderOne(prompt));
     }
 
     return NextResponse.json({ ok: true, images });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e.message }, { status: 500 });
+    return NextResponse.json({ ok: false, error: e.message || "Image generation failed" }, { status: 500 });
   }
 }
