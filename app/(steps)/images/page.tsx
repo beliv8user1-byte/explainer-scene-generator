@@ -1,7 +1,3 @@
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
-export const runtime = 'nodejs';
-
 'use client';
 import { useEffect, useState } from "react";
 import ImageCard from "@/components/ImageCard";
@@ -17,7 +13,7 @@ export default function ImagesPage() {
     const s = sessionStorage.getItem("esg-scenes");
     if (!s) {
       router.replace("/scenes");
-      return; // <- important: return void
+      return; // return void
     }
     try {
       setScenes(JSON.parse(s));
@@ -41,10 +37,7 @@ export default function ImagesPage() {
   }
 
   useEffect(() => {
-    if (scenes.length) {
-      // kick off image generation when scenes are loaded
-      genAll();
-    }
+    if (scenes.length) genAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scenes.length]);
 
@@ -73,13 +66,7 @@ export default function ImagesPage() {
 
       <div className="grid md:grid-cols-2 gap-4">
         {scenes.map((s, i) => (
-          <ImageCard
-            key={i}
-            index={i}
-            scene={s}
-            src={images[i]}
-            onRegenerate={regenOne}
-          />
+          <ImageCard key={i} index={i} scene={s} src={images[i]} onRegenerate={regenOne} />
         ))}
       </div>
 

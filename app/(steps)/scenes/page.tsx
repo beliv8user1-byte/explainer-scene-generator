@@ -13,7 +13,7 @@ export default function ScenesPage() {
     const s = sessionStorage.getItem("esg-script");
     if (!s) {
       router.replace("/");
-      return; // <- return void
+      return; // return void
     }
     setScript(s);
   }, [router]);
