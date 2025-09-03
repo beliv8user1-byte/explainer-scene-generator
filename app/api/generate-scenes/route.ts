@@ -1,49 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
-import { openrouter, OPENROUTER_TEXT_MODEL } from "@/lib/openrouter";
 import { SCENE_SYSTEM } from "@/lib/prompts";
 import { SceneSetSchema } from "@/lib/schemas";
 import { jsonrepair } from "jsonrepair";
 
-// --- helpers ----------------------------------------------------
+// OpenRouter config
+const OR_BASE = process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1";
+const OR_KEY = process.env.OPENROUTER_API_KEY!;
+const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "Explainer Scene Generator";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
+// ---------- helpers ----------
 function stripCodeFences(s: string) {
-  // remove ```json ... ``` or ``` ... ```
   return s.replace(/```[a-z]*\n?([\s\S]*?)```/gi, (_m, p1) => p1 || "");
 }
-
 function extractJson(s: string) {
-  // best-effort: grab the largest {...} block
   const start = s.indexOf("{");
   const end = s.lastIndexOf("}");
   if (start >= 0 && end > start) return s.slice(start, end + 1);
   return s;
 }
-
 function fixQuotes(s: string) {
-  // convert curly quotes to straight quotes
   return s.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
 }
-
 function tidyJson(raw: string) {
-  let t = raw.trim();
+  let t = raw?.trim() ?? "";
   t = stripCodeFences(t);
   t = fixQuotes(t);
   t = extractJson(t);
-  try {
-    // try straight parse
-    return JSON.parse(t);
-  } catch {
-    // try repair then parse
-    try {
-      const repaired = jsonrepair(t);
-      return JSON.parse(repaired);
-    } catch {
-      return null;
-    }
-  }
+  try { return JSON.parse(t); } catch {}
+  try { return JSON.parse(jsonrepair(t)); } catch {}
+  return null;
 }
-
 function normalizeTime(t: string) {
-  // Accept "0–8s", "0-8s", "00:08", "0:8" → "00:08"
   const dash = t.match(/(\d{1,2})\s*[-–]\s*(\d{1,2})/);
   if (dash) {
     const mm = String(parseInt(dash[1], 10)).padStart(2, "0");
@@ -57,12 +45,9 @@ function normalizeTime(t: string) {
     return `${mm}:${ss}`;
   }
   const secs = t.match(/(\d{1,2})\s*s/);
-  if (secs) {
-    return `00:${String(parseInt(secs[1], 10)).padStart(2, "0")}`;
-  }
+  if (secs) return `00:${String(parseInt(secs[1], 10)).padStart(2, "0")}`;
   return t;
 }
-
 function normalizeScenesShape(input: any) {
   if (!input || typeof input !== "object") return null;
   const scenes = Array.isArray(input.scenes) ? input.scenes : [];
@@ -78,70 +63,70 @@ function normalizeScenesShape(input: any) {
   return { scenes: fixed };
 }
 
-// --- call wrappers ----------------------------------------------
-async function callScenes(script: string, style?: string, forceJson?: boolean) {
-  const msgs = [
-    { role: "system", content: SCENE_SYSTEM },
-    { role: "user", content: `Make concise, cinematic scenes from this script.${style ? ` Style: ${style}` : ""}\n\nSCRIPT:\n${script}` }
-  ];
+async function callScenesViaOpenRouter(script: string, style?: string, forceJson = false) {
+  const userContent = `Make concise, cinematic scenes from this script.${style ? ` Style: ${style}` : ""}\n\nSCRIPT:\n${script}`;
 
-  // Try with JSON response_format first (if the model supports it)
-  if (forceJson) {
-    try {
-      const completion = await openrouter.chat.completions.create({
-        model: OPENROUTER_TEXT_MODEL,
-        messages: msgs,
-        temperature: 0.3,
-        response_format: { type: "json_object" } as any
-      });
-      return completion.choices?.[0]?.message?.content || "";
-    } catch {
-      // fall through to non-JSON mode
-    }
-  }
+  const body: any = {
+    model: process.env.OPENROUTER_MODEL || "openai/gpt-oss-120b:free",
+    messages: [
+      { role: "system", content: SCENE_SYSTEM },
+      { role: "user", content: userContent },
+    ],
+    temperature: 0.3,
+  };
+  if (forceJson) body.response_format = { type: "json_object" };
 
-  const completion = await openrouter.chat.completions.create({
-    model: OPENROUTER_TEXT_MODEL,
-    messages: msgs,
-    temperature: 0.3
+  const res = await fetch(`${OR_BASE}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${OR_KEY}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": APP_URL,
+      "X-Title": APP_NAME,
+    },
+    body: JSON.stringify(body),
   });
-  return completion.choices?.[0]?.message?.content || "";
+
+  const json = await res.json();
+  if (!res.ok) {
+    const msg = json?.error?.message || json?.message || res.statusText;
+    throw new Error(`OpenRouter text error: ${msg}`);
+  }
+  return json?.choices?.[0]?.message?.content || "";
 }
 
-// --- route -------------------------------------------------------
+// ---------- route ----------
 export async function POST(req: NextRequest) {
   const { script, style } = await req.json();
   if (!script) return NextResponse.json({ error: "script required" }, { status: 400 });
 
   try {
-    // Attempt 1: ask for JSON mode explicitly
-    let raw = await callScenes(script, style, true);
+    // Try with JSON response_format first
+    let raw = await callScenesViaOpenRouter(script, style, true);
     let obj = tidyJson(raw);
     let normalized = normalizeScenesShape(obj);
 
-    // Attempt 2: repair pass (without response_format, often cleaner)
+    // Fallback: normal completion (some models format better this way)
     if (!normalized) {
-      raw = await callScenes(script, style, false);
+      raw = await callScenesViaOpenRouter(script, style, false);
       obj = tidyJson(raw);
       normalized = normalizeScenesShape(obj);
     }
 
-    // Validate with Zod (final gate)
-    if (!normalized) throw new Error("Could not parse scenes JSON");
+    if (!normalized) throw new Error("Invalid scenes JSON");
+
+    // Final validation gate
     const parsed = SceneSetSchema.safeParse(normalized);
     if (!parsed.success) {
-      // Try a soft normalization: slice to max 8, require at least 6
+      // Soft fix: clamp to max 8 scenes
       const compact = { scenes: normalized.scenes.slice(0, 8) };
       const recheck = SceneSetSchema.safeParse(compact);
-      if (!recheck.success) {
-        throw new Error("Invalid scenes JSON");
-      }
+      if (!recheck.success) throw new Error("Invalid scenes JSON");
       return NextResponse.json({ ok: true, scenes: compact.scenes });
     }
 
     return NextResponse.json({ ok: true, scenes: parsed.data.scenes });
   } catch (e: any) {
-    // Return raw to help the UI show a “Fix JSON” option if you want later
     return NextResponse.json({ ok: false, error: e.message || "Invalid scenes JSON" }, { status: 500 });
   }
 }
