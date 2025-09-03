@@ -1,17 +1,27 @@
 'use client';
 import { useEffect, useState } from "react";
 import ImageCard from "@/components/ImageCard";
+import { useRouter } from "next/navigation";
 
 export default function ImagesPage() {
+  const router = useRouter();
   const [scenes, setScenes] = useState<any[]>([]);
   const [images, setImages] = useState<string[]>([]);
   const [loading, setLoading] = useState<string>("");
 
   useEffect(() => {
     const s = sessionStorage.getItem("esg-scenes");
-    if (!s) return (window.location.href = "/scenes");
-    setScenes(JSON.parse(s));
-  }, []);
+    if (!s) {
+      router.replace("/scenes");
+      return; // <- important: return void
+    }
+    try {
+      setScenes(JSON.parse(s));
+    } catch {
+      router.replace("/scenes");
+      return;
+    }
+  }, [router]);
 
   async function genAll() {
     setLoading("Rendering all…");
@@ -27,7 +37,10 @@ export default function ImagesPage() {
   }
 
   useEffect(() => {
-    if (scenes.length) genAll();
+    if (scenes.length) {
+      // kick off image generation when scenes are loaded
+      genAll();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scenes.length]);
 
@@ -46,7 +59,6 @@ export default function ImagesPage() {
   }
 
   function exportZip() {
-    // minimal: let users right-click download each; export zip can be added later
     alert("Export ZIP not implemented yet. Download images individually for now.");
   }
 

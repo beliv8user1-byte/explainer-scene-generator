@@ -1,17 +1,22 @@
 'use client';
 import { useEffect, useState } from "react";
 import ScenesTable from "@/components/ScenesTable";
+import { useRouter } from "next/navigation";
 
 export default function ScenesPage() {
+  const router = useRouter();
   const [script, setScript] = useState("");
   const [scenes, setScenes] = useState<any[]>([]);
   const [loading, setLoading] = useState<string>("");
 
   useEffect(() => {
     const s = sessionStorage.getItem("esg-script");
-    if (!s) return (window.location.href = "/");
+    if (!s) {
+      router.replace("/");
+      return; // <- return void
+    }
     setScript(s);
-  }, []);
+  }, [router]);
 
   async function genScenes() {
     setLoading("Generating scenes…");
@@ -29,7 +34,7 @@ export default function ScenesPage() {
   function goImages() {
     if (!scenes.length) return alert("Generate scenes first.");
     sessionStorage.setItem("esg-scenes", JSON.stringify(scenes));
-    window.location.href = "/images";
+    router.push("/images");
   }
 
   return (
